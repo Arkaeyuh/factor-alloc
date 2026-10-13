@@ -34,8 +34,9 @@ JKP_WEIGHTING = "vw_cap"
 
 # OSAP dataset names in openassetpricing. "deciles_vw" is the primary panel; "op" follows
 # each original paper's construction and is kept for the decay analysis and robustness.
-OSAP_VARIANTS = ["deciles_vw", "op"]
-OSAP_FILE_TAG = {"deciles_vw": "vw", "op": "op"}
+# "quintiles_vw" is a validation diagnostic (closer to French's 30/70 breakpoints).
+OSAP_VARIANTS = ["deciles_vw", "op", "quintiles_vw"]
+OSAP_FILE_TAG = {"deciles_vw": "vw", "op": "op", "quintiles_vw": "vw_q5"}
 
 
 # ---------------------------------------------------------------------------
@@ -199,12 +200,12 @@ def build_osap() -> dict[str, pd.DataFrame]:
 # ---------------------------------------------------------------------------
 
 
-def _jkp_url(region: str, kind: str) -> str:
-    return f"{JKP_BASE}/[{region}]_[{kind}]_[monthly]_[{JKP_WEIGHTING}].zip"
+def _jkp_url(region: str, kind: str, weighting: str = JKP_WEIGHTING) -> str:
+    return f"{JKP_BASE}/[{region}]_[{kind}]_[monthly]_[{weighting}].zip"
 
 
-def _jkp_raw(region: str, kind: str) -> Path:
-    return RAW / "jkp" / f"{region}_{kind}_monthly_{JKP_WEIGHTING}.zip"
+def _jkp_raw(region: str, kind: str, weighting: str = JKP_WEIGHTING) -> Path:
+    return RAW / "jkp" / f"{region}_{kind}_monthly_{weighting}.zip"
 
 
 def download_jkp() -> None:
@@ -212,12 +213,15 @@ def download_jkp() -> None:
     for region in JKP_REGIONS:
         for kind in ("all_factors", "mkt"):
             download_file(_jkp_url(region, kind), _jkp_raw(region, kind))
+    # Uncapped value-weighted US factors, for the HML validation diagnostic only.
+    download_file(_jkp_url("usa", "all_factors", "vw"), _jkp_raw("usa", "all_factors", "vw"))
     for fname in ("factor_details.xlsx", "cluster_labels.csv"):
         download_file(f"{JKP_REPO}/{fname}", RAW / "jkp" / fname)
 
 
 def build_jkp() -> dict[str, pd.DataFrame]:
-    """Build ``jkp_returns_<region>.parquet``, ``jkp_mkt.parquet`` and ``meta_jkp.parquet``.
+    """Build ``jkp_returns_<region>.parquet``, ``jkp_returns_usa_vw.parquet``, ``jkp_mkt.parquet``
+    and ``meta_jkp.parquet``.
 
     JKP factor returns are already signed in the published direction, so no flip.
     """
@@ -230,6 +234,8 @@ def build_jkp() -> dict[str, pd.DataFrame]:
         out[region] = wide
         m = pd.read_csv(_jkp_raw(region, "mkt"))
         mkt[region] = long_to_wide(m, "date", "name", "ret")["mkt"]
+    usa_vw = pd.read_csv(_jkp_raw("usa", "all_factors", "vw"))
+    _write(long_to_wide(usa_vw, "date", "name", "ret"), "jkp_returns_usa_vw.parquet")
     mkt_df = pd.DataFrame(mkt)
     mkt_df.columns.name = "region"
     _write(mkt_df, "jkp_mkt.parquet")

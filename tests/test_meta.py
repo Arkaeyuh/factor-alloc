@@ -73,3 +73,20 @@ def test_build_jkp_meta_schema():
     assert row["theme"] == "Size"
     assert row["direction"] == -1
     assert row["pub_date"] == pd.Timestamp("1981-12-31")
+
+
+def test_jkp_overrides_fill_only_missing_cites():
+    details = pd.DataFrame(
+        {
+            "abr_jkp": ["op_at", "gp_atl1"],
+            "name_new": ["Operating profits-to-book assets", "Gross profits-to-lagged assets"],
+            "cite": ["Someone (1999)", np.nan],
+            "in-sample period": ["1963 - 2013", "1967 - 2016"],
+            "direction": [1.0, 1.0],
+        }
+    )
+    clusters = pd.DataFrame({"characteristic": [], "cluster": []})
+    m = build_jkp_meta(details, clusters).set_index("factor_id")
+    # A parsed citation year wins over the override table.
+    assert m.loc["op_at", "pub_date"] == pd.Timestamp("1999-12-31")
+    assert m.loc["gp_atl1", "pub_date"] == pd.Timestamp("2020-12-31")

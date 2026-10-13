@@ -68,8 +68,8 @@ momentum, subperiod splits, and deflated Sharpe ratios.
 
 | Milestone | Scope | Status |
 |---|---|---|
-| 1. Ingest and validate | Download OSAP, JKP, and French data; build return panels and factor metadata | **In progress** (see below) |
-| 2. Parts 1 and 2 | Multiple-testing counts; McLean-Pontiff decay regressions | Not started |
+| 1. Ingest and validate | Download OSAP, JKP, and French data; build return panels and factor metadata | Done (one documented gap, see below) |
+| 2. Parts 1 and 2 | Multiple-testing counts; McLean-Pontiff decay regressions | Done (see below) |
 | 3. Backtest engine | Walk-forward engine, costs, trial log, `equal_weight`, `mv_shrink`, look-ahead tests | Not started |
 | 4. More allocators | `ridge_sdf`, `factor_momentum`, deflated Sharpe, subperiods, first draft | Not started |
 | 5. Global test and ML | US-fit / global-test evaluation, `ml_timing`, final writeup | Not started |
@@ -78,23 +78,55 @@ momentum, subperiod splits, and deflated Sharpe ratios.
 
 Ingest is built and the processed panels exist: 179 OSAP value-weighted signals and 212
 OSAP original-paper signals (1926 to 2024), 153 JKP factors for the US and each region,
-and French FF5 plus momentum. Factor metadata covers every OSAP factor; 11 JKP factors are
-missing a publication date.
+and French FF5 plus momentum. Every factor has a publication date; 11 JKP factors without
+a citation are dated by hand (see `JKP_PUB_YEAR_OVERRIDES` in `meta.py`).
 
-Validation against French factors is mixed. Full details are in
-[`results/m1_validation.md`](results/m1_validation.md).
+Validation against French factors, with full details in
+[`results/m1_validation.md`](results/m1_validation.md):
 
-| Check | Correlation | Threshold | Result |
+| Check | Best correlation | Threshold | Result |
 |---|---|---|---|
 | JKP US market vs French Mkt-RF | 0.974 | 0.95 | Pass |
-| JKP US `be_me` vs French HML | 0.816 | 0.90 | Fail |
-| OSAP `Mom12m` (VW) vs French UMD | 0.873 | 0.90 | Fail |
+| OSAP `Mom12m` (VW quintiles) vs French UMD | 0.906 | 0.90 | Pass |
+| JKP US `be_me` (capped VW) vs French HML | 0.816 | 0.90 | Fail, accepted as a known gap |
 
-An alignment check (correlations at one-month lags are all below 0.16) rules out a date
-offset as the cause. The gaps are more likely construction differences: JKP uses capped
-value weights and a single characteristic sort, and OSAP's momentum portfolio differs from
-French's 2x3 size/momentum sort. JKP's own `ret_12_1` correlates 0.965 with UMD. Resolving
-or documenting these gaps is the remaining work before Milestone 1 is closed.
+The HML gap is a construction difference. French HML averages small-cap and large-cap
+value legs from a 2x3 sort, while the free series are single sorts weighted toward large
+caps. Matching it would need stock-level data, which is out of scope.
+
+### Milestone 2 results
+
+Full tables are in [`results/m2_results.md`](results/m2_results.md), and per-factor
+t-stats are in `results/m2_factor_tstats.csv`.
+
+**Part 1 (which factors are real).** Counts are for t-stats over each factor's original
+sample period. All tests are one-sided.
+
+| Panel | Factors | t > 1.96 | HLZ t > 3 | BY-FDR 5% |
+|---|---|---|---|---|
+| OSAP original-paper construction | 212 | 186 | 122 | 150 |
+| OSAP value-weighted deciles | 179 | 79 | 42 | 45 |
+| JKP US (capped VW) | 153 | 81 | 49 | 58 |
+
+Our original-sample t-stats correlate 0.74 with the t-stats reported in the papers.
+Value weighting cuts the survivor count sharply. The drop is concentrated in signals
+whose original paper equal-weighted.
+
+**Part 2 (post-publication decay).** Declines are a share of the in-sample mean. The
+primary panel is OSAP original-paper construction.
+
+| Spec | Post-sample | Post-publication |
+|---|---|---|
+| McLean and Pontiff (2016) | -26% | -58% |
+| OSAP op, raw | -37% | -55% |
+| OSAP op, scaled by own in-sample mean | -29% | -58% |
+| OSAP op, sample cut at 2013 (raw) | -36% | -50% |
+| OSAP VW deciles (raw) | -43% | -68% |
+| JKP US (raw) | -7% (not significant) | -53% |
+
+The post-publication decay replicates. Post-sample decay is close in the scaled spec but
+larger in the raw spec. Year-level dates are a likely contributor; the report discusses
+each gap.
 
 ## Repository layout
 
@@ -103,13 +135,16 @@ src/factor_alloc/
   ingest.py     # download raw data and build wide monthly return panels (Parquet)
   meta.py       # factor metadata table with a common schema for OSAP and JKP
   validate.py   # Milestone 1 acceptance checks; writes results/m1_validation.md
+  testing.py    # Part 1: t-stats, HLZ hurdle, BY-FDR
+  decay.py      # Part 2: McLean-Pontiff decay regression
+  m2_report.py  # Milestone 2 report; writes results/m2_results.md
 tests/          # pytest suite
 results/        # validation reports, trial log, tables, figures
 data/raw/       # downloads (gitignored)
 data/processed/ # Parquet panels (gitignored)
 ```
 
-Planned modules: `testing.py`, `decay.py`, `allocators.py`, `backtest.py`, `evaluate.py`,
+Planned modules: `allocators.py`, `backtest.py`, `evaluate.py`,
 `regions.py`, `trials.py`.
 
 ## Usage
@@ -120,6 +155,7 @@ Requires Python 3.12 and [uv](https://docs.astral.sh/uv/).
 uv sync
 uv run python -m factor_alloc.ingest     # download and build data/processed/
 uv run python -m factor_alloc.validate   # write results/m1_validation.md
+uv run python -m factor_alloc.m2_report  # write results/m2_results.md
 uv run pytest
 uv run ruff check .
 ```

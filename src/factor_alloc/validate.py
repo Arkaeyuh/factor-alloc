@@ -64,7 +64,8 @@ def panel_summary(name: str, returns: pd.DataFrame) -> dict:
     }
 
 
-def _md(df: pd.DataFrame) -> str:
+def md_table(df: pd.DataFrame) -> str:
+    """Render a DataFrame as a Markdown table (no index)."""
     cols = list(df.columns)
     lines = ["| " + " | ".join(map(str, cols)) + " |", "|" + "---|" * len(cols)]
     lines += ["| " + " | ".join(map(str, row)) + " |" for row in df.itertuples(index=False)]
@@ -77,6 +78,8 @@ def run() -> str:
     jkp = {r: pd.read_parquet(PROCESSED / f"jkp_returns_{r}.parquet") for r in JKP_REGIONS}
     jkp_mkt = pd.read_parquet(PROCESSED / "jkp_mkt.parquet")
     osap = {v: pd.read_parquet(PROCESSED / f"osap_returns_{v}.parquet") for v in ("vw", "op")}
+    osap_q5 = pd.read_parquet(PROCESSED / "osap_returns_vw_q5.parquet")
+    jkp_usa_vw = pd.read_parquet(PROCESSED / "jkp_returns_usa_vw.parquet")
     meta_osap = pd.read_parquet(PROCESSED / "meta_osap.parquet")
     meta_jkp = pd.read_parquet(PROCESSED / "meta_jkp.parquet")
 
@@ -85,6 +88,11 @@ def run() -> str:
         overlap_corr(jkp["usa"]["be_me"], french["HML"], "JKP US be_me vs French HML", 0.90),
         overlap_corr(osap["vw"]["Mom12m"], french["UMD"], "OSAP Mom12m (VW) vs French UMD", 0.90),
         overlap_corr(osap["op"]["Mom12m"], french["UMD"], "OSAP Mom12m (op) vs French UMD", 0.90),
+        # Construction diagnostics: alternative variants of the same factors.
+        overlap_corr(osap_q5["Mom12m"], french["UMD"], "OSAP Mom12m (VW quintiles) vs UMD", 0.90),
+        overlap_corr(jkp_usa_vw["be_me"], french["HML"], "JKP US be_me (uncapped VW) vs HML", 0.90),
+        overlap_corr(osap["vw"]["BM"], french["HML"], "OSAP BM (VW) vs French HML", 0.90),
+        overlap_corr(osap_q5["BM"], french["HML"], "OSAP BM (VW quintiles) vs French HML", 0.90),
     ]
     # Informational only: not acceptance checks.
     extra = [
@@ -151,14 +159,14 @@ def run() -> str:
     )
 
     out = ["# Milestone 1: ingest and validation", ""]
-    out += ["## Acceptance: correlations", "", _md(check_df), ""]
-    out += ["## Alignment diagnostic (correlation at month shifts)", "", _md(lag_df), ""]
+    out += ["## Acceptance: correlations", "", md_table(check_df), ""]
+    out += ["## Alignment diagnostic (correlation at month shifts)", "", md_table(lag_df), ""]
     out += ["## Acceptance: missing pub_date", ""]
     for name, (miss, no_meta) in missing.items():
         ids = ", ".join(miss["factor_id"]) if len(miss) else "none"
         out.append(f"- {name}: {len(miss)} factors with missing pub_date ({ids})")
         out.append(f"- {name}: {len(no_meta)} return columns without a meta row")
-    out += ["", "## Data summary", "", _md(summary), ""]
+    out += ["", "## Data summary", "", md_table(summary), ""]
     out += [
         "Notes:",
         "- missing_cells_pct is over the full rectangular panel, so it is mostly late starts.",
@@ -169,7 +177,19 @@ def run() -> str:
         "",
         "## Publication years",
         "",
-        _md(pub_years),
+        md_table(pub_years),
+        "",
+        "## Resolution",
+        "",
+        "- Alignment: every pair peaks at lag 0, so no failure is a date offset.",
+        "- UMD: OSAP Mom12m from VW quintiles passes. The decile and original-paper variants",
+        "  use more extreme breakpoints than French's 30/70 split, which lowers correlation.",
+        "- HML: known gap, accepted. No free series reaches 0.9. French HML averages small and",
+        "  big value legs from a 2x3 size-by-B/M sort; JKP be_me and OSAP BM are single sorts",
+        "  weighted toward large caps. Replicating the 2x3 sort needs stock-level data, which",
+        "  is out of scope. The threshold stays at 0.9 and the check stays FAIL.",
+        "- Missing pub_date: the 11 JKP factors with no citation are dated by",
+        "  meta.JKP_PUB_YEAR_OVERRIDES (Hou, Xue and Zhang 2020; Ball et al. 2015 and 2016).",
         "",
     ]
     return "\n".join(out)

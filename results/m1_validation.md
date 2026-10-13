@@ -8,6 +8,10 @@
 | JKP US be_me vs French HML | 0.816 | 0.9 | FAIL | 738 | 1963-07 to 2024-12 |
 | OSAP Mom12m (VW) vs French UMD | 0.873 | 0.9 | FAIL | 1176 | 1927-01 to 2024-12 |
 | OSAP Mom12m (op) vs French UMD | 0.801 | 0.9 | FAIL | 1176 | 1927-01 to 2024-12 |
+| OSAP Mom12m (VW quintiles) vs UMD | 0.906 | 0.9 | PASS | 1176 | 1927-01 to 2024-12 |
+| JKP US be_me (uncapped VW) vs HML | 0.781 | 0.9 | FAIL | 738 | 1963-07 to 2024-12 |
+| OSAP BM (VW) vs French HML | 0.591 | 0.9 | FAIL | 738 | 1963-07 to 2024-12 |
+| OSAP BM (VW quintiles) vs French HML | 0.682 | 0.9 | FAIL | 738 | 1963-07 to 2024-12 |
 | JKP US ret_12_1 vs French UMD | 0.965 | info |  | 1176 | 1927-01 to 2024-12 |
 | JKP US market_equity vs French SMB | 0.895 | info |  | 738 | 1963-07 to 2024-12 |
 
@@ -24,7 +28,7 @@
 
 - osap: 0 factors with missing pub_date (none)
 - osap: 0 return columns without a meta row
-- jkp: 11 factors with missing pub_date (cop_at, gp_atl1, iskew_capm_21d, iskew_hxz4_21d, ivol_capm_21d, ivol_hxz4_21d, niq_at_chg1, niq_be_chg1, op_at, ope_bel1, saleq_gr1)
+- jkp: 0 factors with missing pub_date (none)
 - jkp: 0 return columns without a meta row
 
 ## Data summary
@@ -53,3 +57,15 @@ Notes:
 |---|---|---|---|---|---|
 | osap | 1973 | 2006 | 2016 | 14 | 51 |
 | jkp | 1973 | 2006 | 2020 | 11 | 37 |
+
+## Resolution
+
+- Alignment: every pair peaks at lag 0, so no failure is a date offset.
+- UMD: OSAP Mom12m from VW quintiles passes. The decile and original-paper variants
+  use more extreme breakpoints than French's 30/70 split, which lowers correlation.
+- HML: known gap, accepted. No free series reaches 0.9. French HML averages small and
+  big value legs from a 2x3 size-by-B/M sort; JKP be_me and OSAP BM are single sorts
+  weighted toward large caps. Replicating the 2x3 sort needs stock-level data, which
+  is out of scope. The threshold stays at 0.9 and the check stays FAIL.
+- Missing pub_date: the 11 JKP factors with no citation are dated by
+  meta.JKP_PUB_YEAR_OVERRIDES (Hou, Xue and Zhang 2020; Ball et al. 2015 and 2016).

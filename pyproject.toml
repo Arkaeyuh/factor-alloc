@@ -12,6 +12,7 @@ dependencies = [
     "polars<2",  # polars 2 uses HTTP range requests, which Google Drive rejects
     "matplotlib>=3.8",
     "openpyxl>=3.1",
+    "statsmodels>=0.14",
 ]
 
 [dependency-groups]
