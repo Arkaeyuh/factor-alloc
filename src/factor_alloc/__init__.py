@@ -1,0 +1,1 @@
+"""Factor allocation research package."""
